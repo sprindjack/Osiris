@@ -30,3 +30,18 @@ jobs:
     - name: Build
       shell: cmd
       run: '"%MSBUILD_PATH%\MSBuild.exe" Osiris/Osiris.vcxproj /p:Platform=Win32 /p:Configuration=Release'
+    - name: Upload binaries to release
+      uses: svenstaro/upload-release-action@v1-release
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: d:/a/Osiris/Osiris/Osiris/Release/Osiris.dll
+        tag: AtuoBuild
+        overwrite: true
+        file_glob: true
+    - uses: ncipollo/release-action@v1
+      with:
+       bodyFile: "changelog.md"
+       tag: AtuoBuild
+       allowUpdates: true
+       name: selfbuild
+       token: ${{ secrets.GITHUB_TOKEN }}
