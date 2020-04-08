@@ -1,9 +1,14 @@
-**Did not even think people gonna visit here, but this is an open source cheat forked from danielkrupinsk. (Means easily get banned and can never smash the paid cheats.)
-I just use Github to easily compile it.
-Download available in release page.
-Protect the cheat with softwares like VMProtect.
-Inject it with your injector. (Better not the public ones.)
-Use at your own risk.**
+**Did not even think people gonna visit here, but this is an open source cheat forked from danielkrupinsk. (Means easily get banned and can never smash the paid cheats.)**
+
+**I just use Github to easily compile it.**
+
+**Download available in release page.**
+
+**Protect the cheat with softwares like VMProtect.**
+
+**Inject it with your injector. (Better not the public ones.)**
+
+**Use at your own risk.**
 
 # Osiris [![C++](https://img.shields.io/badge/language-C%2B%2B-%23f34b7d.svg?style=plastic)](https://en.wikipedia.org/wiki/C%2B%2B) [![CS:GO](https://img.shields.io/badge/game-CS%3AGO-yellow.svg?style=plastic)](https://store.steampowered.com/app/730/CounterStrike_Global_Offensive/) [![Windows](https://img.shields.io/badge/platform-Windows-0078d7.svg?style=plastic)](https://en.wikipedia.org/wiki/Microsoft_Windows) [![x86](https://img.shields.io/badge/arch-x86-red.svg?style=plastic)](https://en.wikipedia.org/wiki/X86) [![License](https://img.shields.io/github/license/danielkrupinski/Osiris.svg?style=plastic)](LICENSE) ![](https://img.shields.io/github/issues/danielkrupinski/Osiris.svg?style=plastic) ![Windows](https://github.com/danielkrupinski/Osiris/workflows/Windows/badge.svg?branch=master&event=push) [![PayPal](https://img.shields.io/badge/donate-PayPal-104098.svg?style=plastic&logo=PayPal)](https://paypal.me/DanielK19)
 
