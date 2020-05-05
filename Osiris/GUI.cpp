@@ -15,7 +15,6 @@
 #include "Hacks/Misc.h"
 #include "Hacks/Reportbot.h"
 #include "Hacks/SkinChanger.h"
-#include "Hacks/Visuals.h"
 #include "Hooks.h"
 #include "SDK/InputSystem.h"
 
@@ -1119,7 +1118,7 @@ void GUI::renderConfigWindow(bool contentOnly) noexcept
     if (!contentOnly) {
         if (!window.config)
             return;
-        ImGui::SetNextWindowSize({ 290.0f, 190.0f });
+        ImGui::SetNextWindowSize({ 290.0f, 200.0f });
         ImGui::Begin("Config", &window.config, windowFlags);
     }
 
@@ -1127,6 +1126,9 @@ void GUI::renderConfigWindow(bool contentOnly) noexcept
     ImGui::SetColumnOffset(1, 170.0f);
 
     ImGui::PushItemWidth(160.0f);
+
+    if (ImGui::Button("Reload configs", { 160.0f, 25.0f }))
+        config->listConfigs();
 
     auto& configItems = config->getConfigs();
     static int currentConfig = -1;
