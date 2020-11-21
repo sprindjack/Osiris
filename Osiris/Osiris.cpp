@@ -1,34 +1,18 @@
-#include "Config.h"
-#include "EventListener.h"
-#include "GUI.h"
+#include <clocale>
+#include <Windows.h>
+
 #include "Hooks.h"
-#include "Interfaces.h"
-#include "Memory.h"
-#include "Netvars.h"
 
-static HMODULE module;
-static WNDPROC originalWndproc;
+extern "C" BOOL WINAPI _CRT_INIT(HMODULE moduleHandle, DWORD reason, LPVOID reserved);
 
-static LRESULT WINAPI init(HWND window, UINT msg, WPARAM wParam, LPARAM lParam) noexcept
+BOOL APIENTRY DllEntryPoint(HMODULE moduleHandle, DWORD reason, LPVOID reserved)
 {
-    SetWindowLongPtr(FindWindowW(L"Valve001", nullptr), GWLP_WNDPROC, LONG_PTR(originalWndproc));
-    config = std::make_unique<Config>("Osiris");
-    gui = std::make_unique<GUI>();
-    interfaces = std::make_unique<const Interfaces>();
-    memory = std::make_unique<const Memory>();
-    eventListener = std::make_unique<EventListener>();
-    netvars = std::make_unique<Netvars>();
-    hooks = std::make_unique<Hooks>(module);
-    hooks->install();
+    if (!_CRT_INIT(moduleHandle, reason, reserved))
+        return FALSE;
 
-    return CallWindowProc(originalWndproc, window, msg, wParam, lParam);
-}
-
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID)
-{
-    if (ul_reason_for_call == DLL_PROCESS_ATTACH) {
-        module = hModule;
-        originalWndproc = WNDPROC(SetWindowLongPtr(FindWindowW(L"Valve001", nullptr), GWLP_WNDPROC, LONG_PTR(init)));
+    if (reason == DLL_PROCESS_ATTACH) {
+        std::setlocale(LC_CTYPE, ".utf8");
+        hooks = std::make_unique<Hooks>(moduleHandle);
     }
     return TRUE;
 }
