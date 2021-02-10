@@ -1,3 +1,4 @@
+#include <cstring>
 #include <list>
 #include <mutex>
 
@@ -15,6 +16,7 @@
 #include "SDK/Localize.h"
 #include "SDK/LocalPlayer.h"
 #include "SDK/ModelInfo.h"
+#include "SDK/PlayerResource.h"
 #include "SDK/Sound.h"
 #include "SDK/WeaponId.h"
 #include "SDK/WeaponData.h"
@@ -26,7 +28,15 @@ static std::vector<ObserverData> observerData;
 static std::vector<WeaponData> weaponData;
 static std::vector<EntityData> entityData;
 static std::vector<LootCrateData> lootCrateData;
-static std::list<ProjectileData> projectileData;
+static std::forward_list<ProjectileData> projectileData;
+static BombData bombData;
+static std::vector<InfernoData> infernoData;
+
+static auto playerByHandleWritable(int handle) noexcept
+{
+    const auto it = std::find_if(playerData.begin(), playerData.end(), [handle](const auto& playerData) { return playerData.handle == handle; });
+    return it != playerData.end() ? &(*it) : nullptr;
+}
 
 void GameData::update() noexcept
 {
@@ -43,8 +53,10 @@ void GameData::update() noexcept
     weaponData.clear();
     entityData.clear();
     lootCrateData.clear();
+    infernoData.clear();
 
     localPlayerData.update();
+    bombData.update();
 
     if (!localPlayer) {
         playerData.clear();
@@ -65,8 +77,8 @@ void GameData::update() noexcept
             if (entity == localPlayer.get() || entity == observerTarget)
                 continue;
 
-            if (const auto it = std::find_if(playerData.begin(), playerData.end(), [handle = entity->handle()](const auto& playerData) { return playerData.handle == handle; }); it != playerData.end()) {
-                it->update(entity);
+            if (const auto player = playerByHandleWritable(entity->handle())) {
+                player->update(entity);
             } else {
                 playerData.emplace_back(entity);
             }
@@ -102,8 +114,12 @@ void GameData::update() noexcept
                     if (const auto it = std::find(projectileData.begin(), projectileData.end(), entity->handle()); it != projectileData.end())
                         it->update(entity);
                     else
-                        projectileData.emplace_back(entity);
+                        projectileData.emplace_front(entity);
                     break;
+                case ClassId::DynamicProp:
+                    if (const auto model = entity->getModel(); !model || !std::strstr(model->name, "challenge_coin"))
+                        break;
+                    [[fallthrough]];
                 case ClassId::EconEntity:
                 case ClassId::Chicken:
                 case ClassId::PlantedC4:
@@ -117,6 +133,10 @@ void GameData::update() noexcept
                     break;
                 case ClassId::LootCrate:
                     lootCrateData.emplace_back(entity);
+                    break;
+                case ClassId::Inferno:
+                    infernoData.emplace_back(entity);
+                    break;
                 }
             }
         }
@@ -127,25 +147,15 @@ void GameData::update() noexcept
     std::sort(entityData.begin(), entityData.end());
     std::sort(lootCrateData.begin(), lootCrateData.end());
 
-    for (auto it = projectileData.begin(); it != projectileData.end();) {
-        if (!interfaces->entityList->getEntityFromHandle(it->handle)) {
-            it->exploded = true;
+    std::for_each(projectileData.begin(), projectileData.end(), [](auto& projectile) {
+        if (interfaces->entityList->getEntityFromHandle(projectile.handle) == nullptr)
+            projectile.exploded = true;
+    });
 
-            if (it->trajectory.size() < 1 || it->trajectory[it->trajectory.size() - 1].first + 60.0f < memory->globalVars->realtime) {
-                it = projectileData.erase(it);
-                continue;
-            }
-        }
-        ++it;
-    }
+    std::erase_if(projectileData, [](const auto& projectile) { return interfaces->entityList->getEntityFromHandle(projectile.handle) == nullptr
+        && (projectile.trajectory.size() < 1 || projectile.trajectory[projectile.trajectory.size() - 1].first + 60.0f < memory->globalVars->realtime); });
 
-    for (auto it = playerData.begin(); it != playerData.end();) {
-        if (!interfaces->entityList->getEntityFromHandle(it->handle)) {
-            it = playerData.erase(it);
-            continue;
-        }
-        ++it;
-    }
+    std::erase_if(playerData, [](const auto& player) { return interfaces->entityList->getEntityFromHandle(player.handle) == nullptr; });
 }
 
 void GameData::clearProjectileList() noexcept
@@ -169,6 +179,11 @@ const std::vector<PlayerData>& GameData::players() noexcept
     return playerData;
 }
 
+const PlayerData* GameData::playerByHandle(int handle) noexcept
+{
+    return playerByHandleWritable(handle);
+}
+
 const std::vector<ObserverData>& GameData::observers() noexcept
 {
     return observerData;
@@ -189,9 +204,19 @@ const std::vector<LootCrateData>& GameData::lootCrates() noexcept
     return lootCrateData;
 }
 
-const std::list<ProjectileData>& GameData::projectiles() noexcept
+const std::forward_list<ProjectileData>& GameData::projectiles() noexcept
 {
     return projectileData;
+}
+
+const BombData& GameData::plantedC4() noexcept
+{
+    return bombData;
+}
+
+const std::vector<InfernoData>& GameData::infernos() noexcept
+{
+    return infernoData;
 }
 
 void LocalPlayerData::update() noexcept
@@ -211,6 +236,7 @@ void LocalPlayerData::update() noexcept
         nextWeaponAttack = activeWeapon->nextPrimaryAttack();
     }
     fov = localPlayer->fov() ? localPlayer->fov() : localPlayer->defaultFov();
+    handle = localPlayer->handle();
     flashDuration = localPlayer->flashDuration();
 
     aimPunch = localPlayer->getEyePosition() + Vector::fromAngle(interfaces->engine->getViewAngles() + localPlayer->getAimPunch()) * 1000.0f;
@@ -240,8 +266,8 @@ BaseData::BaseData(Entity* entity) noexcept
 
 EntityData::EntityData(Entity* entity) noexcept : BaseData{ entity }
 {
-    name = [](ClassId classId) {
-        switch (classId) {
+    name = [](Entity* entity) {
+        switch (entity->getClientClass()->classId) {
         case ClassId::EconEntity: return "Defuse Kit";
         case ClassId::Chicken: return "Chicken";
         case ClassId::PlantedC4: return "Planted C4";
@@ -251,9 +277,10 @@ EntityData::EntityData(Entity* entity) noexcept : BaseData{ entity }
         case ClassId::AmmoBox: return "Ammo Box";
         case ClassId::RadarJammer: return "Radar Jammer";
         case ClassId::SnowballPile: return "Snowball Pile";
+        case ClassId::DynamicProp: return "Collectable Coin";
         default: assert(false); return "unknown";
         }
-    }(entity->getClientClass()->classId);
+    }(entity);
 }
 
 ProjectileData::ProjectileData(Entity* projectile) noexcept : BaseData { projectile }
@@ -498,4 +525,37 @@ ObserverData::ObserverData(Entity* entity, Entity* obs, bool targetIsLocalPlayer
     entity->getPlayerName(name);
     obs->getPlayerName(target);
     this->targetIsLocalPlayer = targetIsLocalPlayer;
+}
+
+void BombData::update() noexcept
+{
+    if (memory->plantedC4s->size > 0 && (!*memory->gameRules || (*memory->gameRules)->mapHasBombTarget())) {
+        if (const auto bomb = (*memory->plantedC4s)[0]; bomb && bomb->c4Ticking()) {
+            blowTime = bomb->c4BlowTime();
+            timerLength = bomb->c4TimerLength();
+            defuserHandle = bomb->c4Defuser();
+            if (defuserHandle != -1) {
+                defuseCountDown = bomb->c4DefuseCountDown();
+                defuseLength = bomb->c4DefuseLength();
+            }
+
+            if (*memory->playerResource) {
+                const auto& bombOrigin = bomb->origin();
+                bombsite = bombOrigin.distTo((*memory->playerResource)->bombsiteCenterA()) > bombOrigin.distTo((*memory->playerResource)->bombsiteCenterB());
+            }
+            return;
+        }
+    }
+    blowTime = 0.0f;
+}
+
+InfernoData::InfernoData(Entity* inferno) noexcept
+{
+    const auto& origin = inferno->getAbsOrigin();
+
+    points.reserve(inferno->fireCount());
+    for (int i = 0; i < inferno->fireCount(); ++i) {
+        if (inferno->fireIsBurning()[i])
+            points.emplace_back(inferno->fireXDelta()[i] + origin.x, inferno->fireYDelta()[i] + origin.y, inferno->fireZDelta()[i] + origin.z);
+    }
 }
